@@ -4,3 +4,12 @@ dist/
 .idea
 *.json
 .env
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+runtime/
+snapshots/
