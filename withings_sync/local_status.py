@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("Europe/Amsterdam")
+# Presentation only: ingestion and the lossless archive retain every source type.
+HIDDEN_METRIC_TYPES = frozenset({4, 11, 91, 155, 167, 227})
 LABELS = {
     1: "Weight",
     4: "Height",
@@ -68,9 +70,9 @@ def coverage(runtime: Path, at=None):
             (state["account_id"],),
         ).fetchall()
         measures = conn.execute(
-            "SELECT g.measured_at,m.category,m.measure_type,COUNT(*) n "
+            "SELECT g.group_id,g.measured_at,m.category,m.measure_type,COUNT(*) n "
             "FROM measurements m JOIN measurement_groups g USING(account_id,category,group_id) "
-            "WHERE m.account_id=? GROUP BY g.measured_at,m.category,m.measure_type",
+            "WHERE m.account_id=? GROUP BY g.group_id,g.measured_at,m.category,m.measure_type",
             (state["account_id"],),
         ).fetchall()
     finally:
@@ -81,7 +83,14 @@ def coverage(runtime: Path, at=None):
     by_day = defaultdict(Counter)
     types = set()
     first = coverage_end
+    visible_groups = {
+        (m["category"], m["group_id"])
+        for m in measures
+        if m["measure_type"] not in HIDDEN_METRIC_TYPES
+    }
     for group in groups:
+        if (group["category"], group["group_id"]) not in visible_groups:
+            continue
         day = datetime.fromtimestamp(group["measured_at"], TZ).date()
         if group["category"] == 1 and day > today:
             raise ValueError("Future-dated source measurements require inspection")
@@ -95,21 +104,18 @@ def coverage(runtime: Path, at=None):
             "measurement_groups" if group["category"] == 1 else "objectives"
         ] += 1
     for measure in measures:
-        if measure["category"] != 1:
+        if measure["category"] != 1 or measure["measure_type"] in HIDDEN_METRIC_TYPES:
             continue
         day = datetime.fromtimestamp(measure["measured_at"], TZ).date()
         code = measure["measure_type"]
         types.add(code)
         by_day[day]["measurements"] += measure["n"]
         by_day[day][f"metric_{code}"] += measure["n"]
-        if code not in LABELS:
-            by_day[day]["unknown_measurements"] += measure["n"]
-    if (coverage_end - first).days >= 20000 or len(types) > 94:
+    if (coverage_end - first).days >= 20000 or len(types) > 95:
         raise ValueError("Coverage exceeds the dashboard evidence limit")
     labels = {
         "measurement_groups": "Measurement groups",
         "measurements": "Observations",
-        "unknown_measurements": "Observations with unmapped metric types",
         "metric_types": "Distinct metric types on this date",
         "objectives": "Objective groups",
         "future_objectives": "Future-dated objective groups (inventory as of last sync)",

@@ -55,11 +55,58 @@ def test_count_only_coverage_keeps_unmapped_types_and_valid_empty_days(tmp_path)
     assert tables["measurement_groups"]["records"] == 1
     assert tables["measurements"]["records"] == 2
     assert tables["metric_9999"]["records"] == 1
-    assert tables["unknown_measurements"]["records"] == 1
     assert tables["metric_types"]["records"] == 2
     assert all(not t["core"] for t in observed["tables"])
     empty = next(d for d in data["days"] if not d["records"] and not d["today"])
     assert empty["state"] == "complete" and empty["backfilled"]
+
+
+def test_hidden_metrics_excluded_from_view_but_retained_in_database(tmp_path):
+    hidden = {4, 11, 91, 155, 167, 227}
+
+    class Mixed(Provider):
+        def request(self, params):
+            if params["category"] == 2:
+                return {"status": 0, "body": {"measuregrps": []}}
+            return {
+                "status": 0,
+                "body": {
+                    "measuregrps": [
+                        {
+                            "grpid": 1,
+                            "date": 1782896400,
+                            "measures": [
+                                {"type": t, "value": 1, "unit": 0}
+                                for t in sorted(
+                                    hidden | {1, 5, 6, 8, 76, 77, 88, 170, 226}
+                                )
+                            ],
+                        },
+                        {
+                            "grpid": 2,
+                            "date": 1782810000,
+                            "measures": [{"type": 11, "value": 1, "unit": 0}],
+                        },
+                    ]
+                },
+            }
+
+    sync(tmp_path, provider_factory=Mixed)
+    data = coverage(tmp_path)
+    tables = {
+        t["table"]: t for day in data["days"] for t in day["tables"] if t["records"]
+    }
+    assert {
+        key for key in tables if key.startswith("metric_") and key != "metric_types"
+    } == {f"metric_{t}" for t in (1, 5, 6, 8, 76, 77, 88, 170, 226)}
+    assert tables["measurements"]["records"] == 9
+    assert tables["measurement_groups"]["records"] == 1
+    assert tables["metric_types"]["records"] == 9
+    assert "unknown_measurements" not in tables
+    with sqlite3.connect(tmp_path / "withings.sqlite3") as db:
+        assert db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0] == 16
+        assert db.execute("SELECT COUNT(*) FROM measurement_groups").fetchone()[0] == 2
+    assert data["days"][0]["date"] == "2026-07-01"
 
 
 def test_failure_does_not_claim_fresh_success(tmp_path):

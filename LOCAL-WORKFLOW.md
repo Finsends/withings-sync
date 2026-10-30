@@ -60,8 +60,12 @@ disaster backup. No automatic retention deletes history or snapshots.
 
 ## Availability dashboard and health
 
-The existing Application Health page `/apps/withings-sync` shows measurement
-groups, observations, unmapped types, dates, and counts for each metric type.
+The existing Application Health page `/apps/withings-sync` shows visible measurement
+groups, observations, dates, and counts for each displayed metric type.
+Height (4), standing heart rate (11), pulse-wave velocity (91), vascular age (155),
+nerve health (167), and unmapped type 227 are hidden from this view and its totals.
+Their complete history remains in the database and continues to sync. The display
+filter does not change ingestion, raw-response retention, or sync checkpoints.
 It reuses the Garmin coverage template. Health checks cover live-sync freshness,
 coverage, service identity, SQLite integrity, and the scheduled recovery copy.
 Empty measurement days are valid, not failures. The calendar ends at the last
