@@ -77,6 +77,9 @@ def test_series_uses_exact_scale_and_inclusive_local_dst_end_date(tmp_path):
     assert (
         data["points"][1]["timestamp"] - data["points"][0]["timestamp"] == 25 * 3600 - 1
     )
+    assert data["end_timestamp"] - data["start_timestamp"] == 25 * 3600
+    assert data["points"][0]["timestamp"] == data["start_timestamp"]
+    assert data["points"][-1]["timestamp"] == data["end_timestamp"] - 1
     assert data["metric"]["label"] == "Weight" and data["metric"]["unit"] == "kg"
     assert "synthetic" not in json.dumps(data)
     fat = measurement_series(tmp_path, params(metric="6"))

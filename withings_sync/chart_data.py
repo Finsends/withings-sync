@@ -148,5 +148,7 @@ def measurement_series(runtime: Path, parameters):
         "metric": metric_info(metric),
         "start": start_text,
         "end": end_text,
+        "start_timestamp": start_epoch,
+        "end_timestamp": end_epoch,
         "points": points,
     }

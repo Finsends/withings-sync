@@ -94,9 +94,6 @@
         return;
       }
       container.hidden = false;
-      const timestamps = data.points.map((point) => point.timestamp * 1000);
-      const firstTime = Math.min(...timestamps);
-      const lastTime = Math.max(...timestamps);
       graph = new Chart(canvas, {
         type: "line",
         data: {
@@ -130,7 +127,8 @@
           scales: {
             x: {
               type: "linear",
-              ...(firstTime === lastTime ? { min: firstTime - 43200000, max: lastTime + 43200000 } : {}),
+              min: data.start_timestamp * 1000,
+              max: data.end_timestamp * 1000 - 1,
               title: { display: true, text: "Date" },
               grid: { color: "#edf2f8" },
               ticks: { maxTicksLimit: 6, maxRotation: 0, callback: (value) => dateFormatter.format(value) }
