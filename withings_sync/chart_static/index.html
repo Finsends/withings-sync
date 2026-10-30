@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Withings data</title>
+  <link rel="stylesheet" href="chart.css">
+  <script src="vendor/chart.umd.js" defer></script>
+  <script src="chart.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Withings data</h1>
+    <form id="filters" class="filters" aria-label="Graph filters">
+      <label>Start date<input id="start-date" name="start" type="date" required disabled></label>
+      <label>End date<input id="end-date" name="end" type="date" required disabled></label>
+      <label>Metric<select id="metric" name="metric" disabled></select></label>
+    </form>
+    <section class="chart-panel" aria-labelledby="chart-title" aria-busy="true" id="chart-panel">
+      <h2 id="chart-title">Loading measurements…</h2>
+      <p id="chart-status" role="status" aria-live="polite">Loading available metrics…</p>
+      <div class="chart-container" id="chart-container" hidden>
+        <canvas id="metric-chart" role="img" aria-label="Measurement values by date"></canvas>
+      </div>
+      <p id="metric-description" class="description" hidden></p>
+    </section>
+    <noscript><p>Enable JavaScript to view the graph.</p></noscript>
+  </main>
+</body>
+</html>

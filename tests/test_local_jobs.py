@@ -24,3 +24,9 @@ def test_jobs_use_private_runtime_and_one_native_schedule(tmp_path):
     assert status["KeepAlive"] and status["RunAtLoad"]
     assert status["ProgramArguments"][-1] == "18796"
     assert (runtime / "logs").stat().st_mode & 0o777 == 0o700
+    configured = module.jobs(project, runtime, "owner@example.com")
+    assert "WITHINGS_TAILSCALE_USER" not in configured[0]["EnvironmentVariables"]
+    assert (
+        configured[1]["EnvironmentVariables"]["WITHINGS_TAILSCALE_USER"]
+        == "owner@example.com"
+    )
