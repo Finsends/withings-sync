@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+cd "$(dirname "$0")"
+export TZ=Europe/Amsterdam
+unset GARMIN_USERNAME GARMIN_PASSWORD TRAINERROAD_USERNAME TRAINERROAD_PASSWORD
+exec .venv/bin/python -m withings_sync.local_cli sync "$@"
