@@ -34,6 +34,15 @@ LABELS = {
 }
 
 
+def identity():
+    """Small service identity; database and sync checks use separate evidence."""
+    return {
+        "app": "withings-sync",
+        "schema_version": 1,
+        "description": "Withings measurement history stored locally. Counts only; health values remain private.",
+    }
+
+
 def coverage(runtime: Path, at=None):
     """Obtain one consistent SQLite snapshot; never return measurement values."""
     at = at or datetime.now(timezone.utc)
@@ -158,9 +167,7 @@ def coverage(runtime: Path, at=None):
         )
 
     return {
-        "app": "withings-sync",
-        "schema_version": 1,
-        "description": "Withings measurement history stored locally. Counts only; health values remain private.",
+        **identity(),
         "observed_at": at.isoformat(),
         "database": "SQLite",
         "timezone": str(TZ),
@@ -193,11 +200,13 @@ def create_server(runtime: Path, port: int):
             }:
                 self.send_error(403)
                 return
-            if urlsplit(self.path).path != "/api/coverage":
+            path = urlsplit(self.path).path
+            if path not in {"/api/coverage", "/api/health"}:
                 self.send_error(404)
                 return
             try:
-                body = json.dumps(coverage(runtime), separators=(",", ":")).encode()
+                data = identity() if path == "/api/health" else coverage(runtime)
+                body = json.dumps(data, separators=(",", ":")).encode()
                 if len(body) > 16 * 1024 * 1024:
                     raise ValueError("Coverage response exceeds limit")
                 code = 200

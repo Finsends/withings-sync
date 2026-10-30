@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from withings_sync.local_cli import backup
 from withings_sync.local_ingest import SyncError, sync
-from withings_sync.local_status import coverage
+from withings_sync.local_status import coverage, identity
 
 
 class Provider:
@@ -34,6 +34,13 @@ class Provider:
             ]
         )
         return {"status": 0, "body": {"measuregrps": groups}}
+
+
+def test_identity_is_small_and_independent_of_history():
+    data = identity()
+    assert data["app"] == "withings-sync" and data["schema_version"] == 1
+    assert len(json.dumps(data).encode()) < 1024
+    assert "days" not in data and "sync" not in data
 
 
 def test_count_only_coverage_keeps_unmapped_types_and_valid_empty_days(tmp_path):

@@ -70,7 +70,7 @@ the calendar and Health shows that current coverage is not yet confirmed.
 No measurement values leave the app-owned database.
 
 The app-owned API binds only `127.0.0.1:18796` (reserved in `PORTS.md`) and serves
-`GET /api/coverage`. It reads one consistent database snapshot on each request,
+`GET /api/coverage` plus a small identity-only `GET /api/health`. Coverage reads one consistent database snapshot on each request,
 returns count-only evidence, rejects unexpected Host headers, and has no CORS,
 write, authentication, or token endpoint. Access through the existing private
 Health dashboard; never expose this status port publicly.
