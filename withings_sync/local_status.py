@@ -1,13 +1,16 @@
 """Read-only, count-only coverage for the existing Application Health UI."""
 
 import json
+import os
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
+
+from .chart_data import ChartInputError, available_metrics, measurement_series
 
 TZ = ZoneInfo("Europe/Amsterdam")
 # Presentation only: ingestion and the lossless archive retain every source type.
@@ -199,12 +202,29 @@ def create_server(runtime: Path, port: int):
         timeout = 10
 
         def do_GET(self):
-            # Reject arbitrary Host headers, including DNS rebinding from public pages.
-            if self.headers.get("Host") not in {
+            parsed = urlsplit(self.path)
+            chart_path = (
+                parsed.path.removeprefix("/withings")
+                if parsed.path == "/withings" or parsed.path.startswith("/withings/")
+                else parsed.path
+            )
+            is_chart = (
+                parsed.path == "/withings"
+                or parsed.path.startswith("/withings/")
+                or chart_path not in {"/api/coverage", "/api/health"}
+            )
+            allowed_hosts = {
                 f"127.0.0.1:{self.server.server_port}",
                 f"localhost:{self.server.server_port}",
-            }:
+            }
+            if is_chart:
+                allowed_hosts.add("mothership.tailfe5410.ts.net:8793")
+            # Reject arbitrary Host headers, including DNS rebinding from public pages.
+            if self.headers.get("Host") not in allowed_hosts:
                 self.send_error(403)
+                return
+            if is_chart:
+                self.chart_response(chart_path, parsed.query)
                 return
             path = urlsplit(self.path).path
             if path not in {"/api/coverage", "/api/health"}:
@@ -223,6 +243,69 @@ def create_server(runtime: Path, port: int):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def chart_response(self, path, query):
+            # Tailscale Serve strips spoofed identity headers and supplies the
+            # authenticated owner. This backend stays bound to loopback only.
+            owner = os.environ.get("WITHINGS_TAILSCALE_USER", "")
+            if (
+                not owner
+                or self.headers.get("Tailscale-User-Login", "").casefold()
+                != owner.casefold()
+            ):
+                self.send_error(403)
+                return
+            if self.path == "/withings":
+                self.send_response(308)
+                self.send_header("Location", "/withings/")
+                self.end_headers()
+                return
+            assets = {
+                "/": ("index.html", "text/html; charset=utf-8"),
+                "/index.html": ("index.html", "text/html; charset=utf-8"),
+                "/chart.js": ("chart.js", "application/javascript"),
+                "/chart.css": ("chart.css", "text/css"),
+                "/vendor/chart.umd.js": (
+                    "vendor/chart.umd.js",
+                    "application/javascript",
+                ),
+            }
+            code, content_type = 200, "application/json"
+            try:
+                if path in assets:
+                    asset, content_type = assets[path]
+                    body = (Path(__file__).parent / "chart_static" / asset).read_bytes()
+                elif path == "/api/metrics":
+                    body = json.dumps(available_metrics(runtime)).encode()
+                elif path == "/api/series":
+                    if len(query) > 1024:
+                        raise ChartInputError("The requested query is too long.")
+                    body = json.dumps(
+                        measurement_series(
+                            runtime, parse_qs(query, keep_blank_values=True)
+                        )
+                    ).encode()
+                else:
+                    code, body = 404, b'{"error":"Not found."}'
+            except ChartInputError as error:
+                code, body = 400, json.dumps({"error": str(error)}).encode()
+            except Exception:  # noqa: BLE001 -- Hide private database/provider details.
+                code, body = (
+                    503,
+                    b'{"error":"Measurements are temporarily unavailable."}',
+                )
+            self.send_response(code)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            )
             self.end_headers()
             self.wfile.write(body)
 

@@ -71,13 +71,35 @@ coverage, service identity, SQLite integrity, and the scheduled recovery copy.
 Empty measurement days are valid, not failures. The calendar ends at the last
 successful sync date. Before the next daily job, unqueried dates remain outside
 the calendar and Health shows that current coverage is not yet confirmed.
-No measurement values leave the app-owned database.
+Application Health receives counts only. The separate owner-only chart sends
+selected measurement values to the owner's browser over private Tailscale HTTPS.
+
+### Simple metric chart
+
+`https://mothership.tailfe5410.ts.net:8793/withings/` has start/end date inputs,
+a selector for the nine displayed metrics, and a line graph. The horizontal axis
+is measurement date; the vertical axis and title name the selected metric and
+unit. A short description follows the graph. Raw values are scaled using their
+stored exponent without averaging. End dates include the entire Amsterdam day,
+including daylight-saving transitions. Empty ranges are explicit.
+
+Chart.js 4.5.1 is vendored from the official npm package, integrity-verified,
+with its MIT license. Viewing the graph makes no CDN or third-party requests.
+No browser storage, analytics, export or additional filters are introduced.
+
+The chart reuses the loopback server on port 18796; its HTML, assets and series
+API require `WITHINGS_TAILSCALE_USER` to match Tailscale Serve's authenticated
+`Tailscale-User-Login` header. Missing configuration or a different user is denied.
+Serve strips spoofed client identity headers. Do not expose this loopback backend
+directly. Existing `/api/coverage` and `/api/health` keep their count-only contract.
+Chart series exclude goals and the six hidden types; queries are bounded to
+20,000 days and 50,000 readings and never silently truncate results.
 
 The app-owned API binds only `127.0.0.1:18796` (reserved in `PORTS.md`) and serves
 `GET /api/coverage` plus a small identity-only `GET /api/health`. Coverage reads one consistent database snapshot on each request,
-returns count-only evidence, rejects unexpected Host headers, and has no CORS,
-write, authentication, or token endpoint. Access through the existing private
-Health dashboard; never expose this status port publicly.
+returns count-only evidence and rejects unexpected Host headers. The additional
+chart routes authenticate the owner and remain read-only, with no CORS or token
+endpoint. Never expose this backend port publicly.
 
 ## Native Mac jobs
 
@@ -91,10 +113,20 @@ Both jobs use private logs and require no Codex session or AI usage.
 ```sh
 .venv/bin/python deployment/local_jobs.py \
   --project "$PWD" --runtime "$HOME/.local/share/withings-sync" \
-  --destination "$HOME/Library/LaunchAgents"
+  --destination "$HOME/Library/LaunchAgents" --tailscale-user YOUR_TAILSCALE_LOGIN
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.finsends.withings-sync.plist"
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.finsends.withings-status.plist"
 ```
+
+Add only the chart route to the existing private Serve configuration:
+
+```sh
+/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg --https=8793 \
+  --set-path=/withings/ http://127.0.0.1:18796
+```
+
+Preserve the existing `/` route to Application Health. Its Withings `Open app`
+URL points to `/withings/`; `View details` remains `/apps/withings-sync`.
 
 To restore, stop the sync job, retain the current database and its WAL files,
 verify the selected snapshot's integrity and raw-response hashes, then restore
